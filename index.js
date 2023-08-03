@@ -1,0 +1,103 @@
+const {
+	completeAllFights,
+	completeFightAgainstTarget,
+	isFightingTarget,
+	recordDamageAgainstTarget,
+	startFightAgainstTarget,
+} = require("./dps_meter");
+
+const reportName = "dps report";
+
+exports.NetworkMod = class {
+	constructor(mod) {
+		mod.hook("S_EACH_SKILL_RESULT", 14, ({ type,
+			target, source, owner, value }) => {
+			const realSource = owner !== 0n ? owner : source;
+
+			// only record damage from own skills (what about DOTs)
+			if (realSource !== mod.game.me.gameId) return;
+			if (type !== 1) return;
+
+			if (!isFightingTarget(target)) {
+				startFightAgainstTarget(target,
+					gameIdNameMap.get(target) ?? target,
+					value);
+			} else {
+				recordDamageAgainstTarget(target, value);
+			}
+		});
+
+		let inCombat = false;
+		mod.hook("S_USER_STATUS", 3, ({ gameId, status }) => {
+			if (gameId !== mod.game.me.gameId) return;
+
+			if (!inCombat && status === 1) {
+				inCombat = true;
+			} else if (inCombat && status === 0) {
+				// if leaving combat, complete all fights because mobs reset
+				inCombat = false;
+				const text = completeAllFights();
+				for (const dpsMessage of text) {
+					if (!dpsMessage) continue;
+
+					mod.send("S_CHAT", 3, {
+						name: reportName,
+						message: dpsMessage,
+					});
+				}
+			}
+		});
+
+		let huntingZoneIdTemplateIdNameMap = new Map();
+		let gameIdNameMap = new Map();
+		// v12 doesn't work for fetching npc names for some reason
+		mod.hook("S_SPAWN_NPC", 11, async ({ gameId,
+			templateId, huntingZoneId }) => {
+			if (!huntingZoneIdTemplateIdNameMap.has(huntingZoneId)) {
+				huntingZoneIdTemplateIdNameMap.set(huntingZoneId, new Map());
+			}
+			if (!huntingZoneIdTemplateIdNameMap.get(huntingZoneId)
+					.has(templateId)) {
+				const result = await mod.queryData(
+					"/StrSheet_Creature/HuntingZone@id=?/String@templateId=?",
+					[huntingZoneId, templateId]);
+				if (!result) {
+					mod.warn(`Could not get npc name of ${huntingZoneId}-${templateId}`);
+				}
+
+				huntingZoneIdTemplateIdNameMap.get(huntingZoneId)
+					.set(templateId, result?.attributes?.name ?? `${huntingZoneId}-${templateId}`);
+			}
+			gameIdNameMap.set(gameId, huntingZoneIdTemplateIdNameMap
+				.get(huntingZoneId).get(templateId));
+		});
+
+		mod.hook("S_NPC_STATUS", 2, ({ gameId, status, hpLevel }) => {
+			// only care if a mob that we've hit goes out of combat or dies
+			if (!isFightingTarget(gameId)) return;
+			if (status !== 4 || hpLevel !== 0 || status !== 0) return;
+
+			const dpsMessage = completeFightAgainstTarget(gameId);
+			if (!dpsMessage) return;
+
+			mod.send("S_CHAT", 3, {
+				name: reportName,
+				message: dpsMessage,
+			});
+		});
+
+		mod.hook("S_CREATURE_CHANGE_HP", 6, ({ curHp, target }) => {
+			// only care if a mob that we've hit dies
+			if (!isFightingTarget(target)) return;
+			if (curHp > 0n) return;
+
+			const dpsMessage = completeFightAgainstTarget(target);
+			if (!dpsMessage) return;
+
+			mod.send("S_CHAT", 3, {
+				name: reportName,
+				message: dpsMessage,
+			});
+		});
+	}
+}
