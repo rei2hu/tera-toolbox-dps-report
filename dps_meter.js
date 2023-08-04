@@ -16,13 +16,10 @@ function recordDamageAgainstTarget(gameId, value) {
 }
 
 /**
- * @return string | null - text that details the fight or null if no damage done
+ * @return object - object with dps info
  */
-function completeFightAgainstTarget(gameId) {
-	assert(isFightingTarget(gameId));
-
+function getDpsInfo(gameId) {
 	const info = targetIdInfoMap.get(gameId);
-	targetIdInfoMap.delete(gameId);
 	const elapsedSeconds = BigInt(Math.ceil(
 		(Date.now() - info.combatStart) / 1000));
 	// the EACH_SKILL_RESULT event triggers after this on the same mob so it
@@ -34,17 +31,39 @@ function completeFightAgainstTarget(gameId) {
 		return null;
 	}
 
-	return `${info.targetName}: ${info.totalDamage / elapsedSeconds} (${elapsedSeconds}s)`;
+	return {
+		name: info.targetName,
+		dps: info.totalDamage / elapsedSeconds,
+		duration: elapsedSeconds,
+	};
 }
 
 /**
- * @return (string | null)[] - text that details all ongoing fights
+ * @return object | null - object with dps info or else null if short fight
+ */
+function completeFightAgainstTarget(gameId) {
+	assert(isFightingTarget(gameId));
+
+	const message = getDpsInfo(gameId);
+	targetIdInfoMap.delete(gameId);
+	return message;
+}
+
+/**
+ * @return (object | null)[] - list of dps info objects and nulls
  */
 function completeAllFights() {
+	const messages = getAllDpsMessages();
+	targetIdInfoMap.clear();
+	return messages;
+}
+
+/**
+ * @return (string | null)[] - list of dps info objects and nulls
+ */
+function getAllDpsMessages() {
 	const targetIds = Array.from(targetIdInfoMap.keys());
-	const text = targetIds.map(targetId =>
-		completeFightAgainstTarget(targetId));
-	return text;
+	return targetIds.map(targetId => getDpsInfo(targetId));
 }
 
 function startFightAgainstTarget(gameId, name, initialDamage) {
@@ -60,10 +79,18 @@ function createTargetInfoObj(name, initialDamage) {
 	};
 }
 
+function formatDpsInfo(dpsInfo) {
+	let dps = dpsInfo.dps;
+	let suffix = "/s";
+	return `${dpsInfo.name}: ${dps}${suffix} (${dpsInfo.duration}s)`;
+}
+
 module.exports = {
 	isFightingTarget,
 	completeFightAgainstTarget,
 	completeAllFights,
 	recordDamageAgainstTarget,
 	startFightAgainstTarget,
+	getAllDpsMessages,
+	formatDpsInfo,
 }
