@@ -39,7 +39,9 @@ exports.NetworkMod = class {
 				dpsInfoInterval = mod.setInterval(() => {
 					const dpsInfo = getAllDpsMessages()
 							.filter(maybeInfo => maybeInfo !== null)
-							.sort((a, b) => b.dps - a.dps > 0n ? 1 : -1);
+							.sort((a, b) => b.totalDamage - a.totalDamage > 0n
+								? 1
+								: -1);
 					mod.send("S_CUSTOM_STYLE_SYSTEM_MESSAGE", 1, {
 						style: 49, // box on side of window
 						message: dpsInfo.map(info => formatDpsInfo(info))

@@ -34,6 +34,7 @@ function getDpsInfo(gameId) {
 	return {
 		name: info.targetName,
 		dps: info.totalDamage / elapsedSeconds,
+		totalDamage: info.totalDamage,
 		duration: elapsedSeconds,
 	};
 }
