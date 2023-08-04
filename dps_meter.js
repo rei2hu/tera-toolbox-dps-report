@@ -46,7 +46,10 @@ function completeFightAgainstTarget(gameId) {
 	assert(isFightingTarget(gameId));
 
 	const message = getDpsInfo(gameId);
-	targetIdInfoMap.delete(gameId);
+	// see comment about EACH_SKILL_RESULT sending info after target dies
+	// tldr: keep target info for a bit so it doesn't think there's a new fight
+	// against the target starting
+	setTimeout(() => targetIdInfoMap.delete(gameId), 3000);
 	return message;
 }
 
@@ -83,7 +86,20 @@ function createTargetInfoObj(name, initialDamage) {
 function formatDpsInfo(dpsInfo) {
 	let dps = dpsInfo.dps;
 	let suffix = "/s";
-	return `${dpsInfo.name}: ${dps}${suffix} (${dpsInfo.duration}s)`;
+
+	assert.ok(dps <= BigInt(Number.MAX_SAFE_INTEGER));
+
+	dps = Number(dps);
+	if (dps > 1000) {
+		dps /= 1000;
+		suffix = "k/s";
+		if (dps > 1000) {
+			dps /= 1000;
+			suffix = "m/s";
+		}
+	}
+
+	return `${dpsInfo.name}: ${dps.toFixed(3)}${suffix} (${dpsInfo.duration}s)`;
 }
 
 module.exports = {
