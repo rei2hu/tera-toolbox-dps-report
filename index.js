@@ -41,7 +41,8 @@ exports.NetworkMod = class {
 							.filter(maybeInfo => maybeInfo !== null)
 							.sort((a, b) => b.totalDamage - a.totalDamage > 0n
 								? 1
-								: -1);
+								: -1)
+							.slice(0, 5);
 					mod.send("S_CUSTOM_STYLE_SYSTEM_MESSAGE", 1, {
 						style: 49, // box on side of window
 						message: dpsInfo.map(info => formatDpsInfo(info))
